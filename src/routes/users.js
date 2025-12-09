@@ -1,5 +1,6 @@
 import express from 'express';
 import { UserModel } from '../models/User.js';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken, authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -26,22 +27,39 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// CREATE user
+// CREATE user (with JWT tokens)
 router.post('/', async (req, res) => {
   try {
-    const { email, displayName, photoURL } = req.body;
+    const { email, displayName, photoURL, role = 'user' } = req.body;
     
     if (!email || !displayName) {
       return res.status(400).json({ error: 'Email and displayName required' });
     }
 
-    const existingUser = await UserModel.findByEmail(email);
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
+    let user = await UserModel.findByEmail(email);
+    
+    // If user doesn't exist, create new user
+    if (!user) {
+      const userId = await UserModel.create({ 
+        email, 
+        displayName, 
+        photoURL,
+        role: role.toLowerCase()
+      });
+      
+      user = await UserModel.findById(userId.toString());
     }
 
-    const userId = await UserModel.create({ email, displayName, photoURL });
-    res.status(201).json({ _id: userId, email, displayName, photoURL });
+    // Generate tokens
+    const accessToken = generateAccessToken(user._id.toString(), user.email);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.email);
+
+    res.status(201).json({
+      user,
+      accessToken,
+      refreshToken,
+      expiresIn: 1800 // 30 minutes in seconds
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -50,9 +68,16 @@ router.post('/', async (req, res) => {
 // UPDATE user
 router.put('/:id', async (req, res) => {
   try {
-    const { displayName, photoURL } = req.body;
-    await UserModel.update(req.params.id, { displayName, photoURL });
-    res.json({ message: 'User updated successfully' });
+    const { displayName, photoURL, role } = req.body;
+    const updateData = { displayName, photoURL };
+    
+    if (role) {
+      updateData.role = role.toLowerCase();
+    }
+    
+    await UserModel.update(req.params.id, updateData);
+    const user = await UserModel.findById(req.params.id);
+    res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -62,7 +87,33 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     await UserModel.delete(req.params.id);
-    res.json({ message: 'User deleted successfully' });
+    res.json({ message: 'User deleted successfully', _id: req.params.id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// REFRESH token endpoint
+router.post('/refresh-token', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) {
+      return res.status(403).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    // Generate new access token
+    const newAccessToken = generateAccessToken(decoded.userId, decoded.email);
+
+    res.json({
+      accessToken: newAccessToken,
+      expiresIn: 1800 // 30 minutes in seconds
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

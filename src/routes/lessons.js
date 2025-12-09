@@ -1,6 +1,7 @@
 import express from 'express';
 import { LessonModel } from '../models/Lesson.js';
 import { SaveModel } from '../models/Save.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -52,7 +53,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // CREATE lesson
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { title, content, author, status = 'draft' } = req.body;
     
@@ -76,7 +77,7 @@ router.post('/', async (req, res) => {
 });
 
 // UPDATE lesson
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { title, content, author, status } = req.body;
     await LessonModel.update(req.params.id, { title, content, author, status });
@@ -89,7 +90,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE lesson
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     await LessonModel.delete(req.params.id);
     res.json({ message: 'Lesson deleted successfully', _id: req.params.id });
