@@ -6,6 +6,7 @@ export class UserModel {
     const db = getDB();
     const result = await db.collection('users').insertOne({
       ...userData,
+      isPremium: false, // New users start with free plan
       createdAt: new Date(),
       updatedAt: new Date()
     });

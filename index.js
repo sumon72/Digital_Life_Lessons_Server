@@ -5,13 +5,16 @@ import { connectDB } from './src/config/db.js';
 import usersRouter from './src/routes/users.js';
 import lessonsRouter from './src/routes/lessons.js';
 import contributorsRouter from './src/routes/contributors.js';
+import paymentRouter from './src/routes/payment.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Middleware - Important: raw body for Stripe webhook must be before JSON parser
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
+
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -36,6 +39,7 @@ app.get('/', (req, res) => {
 app.use('/api/users', usersRouter);
 app.use('/api/lessons', lessonsRouter);
 app.use('/api/contributors', contributorsRouter);
+app.use('/api/payment', paymentRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
