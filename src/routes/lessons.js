@@ -65,6 +65,7 @@ router.post('/', authenticateToken, async (req, res) => {
       authorName,
       authorPhotoURL,
       accessLevel,
+      privacy,
       status = 'draft' 
     } = req.body;
     
@@ -82,6 +83,7 @@ router.post('/', authenticateToken, async (req, res) => {
       authorName: authorName || author,
       authorPhotoURL: authorPhotoURL || '',
       accessLevel: accessLevel || 'free',
+      privacy: privacy || 'private',
       status
     });
 
@@ -106,6 +108,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       authorName,
       authorPhotoURL,
       accessLevel,
+      privacy,
       status 
     } = req.body;
     await LessonModel.update(req.params.id, { 
@@ -118,6 +121,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       authorName,
       authorPhotoURL,
       accessLevel,
+      privacy,
       status 
     });
     // Fetch and return the updated lesson
