@@ -1,11 +1,12 @@
 import express from 'express';
 import { UserModel } from '../models/User.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken, authenticateToken } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
-// GET all users
-router.get('/', async (req, res) => {
+// GET all users (Admin only)
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const users = await UserModel.findAll();
     res.json(users);
@@ -14,10 +15,22 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET user by ID
-router.get('/:id', async (req, res) => {
+// GET user by ID (users can only get their own data unless admin)
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const user = await UserModel.findById(req.params.id);
+    const requestedId = req.params.id;
+    const requestingUserId = req.user.userId;
+    const requestingUserRole = req.user.role;
+
+    // Users can only fetch their own data unless they're admin
+    if (requestedId !== requestingUserId && requestingUserRole !== 'admin') {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'You can only access your own user data.'
+      });
+    }
+
+    const user = await UserModel.findById(requestedId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -50,9 +63,9 @@ router.post('/', async (req, res) => {
       user = await UserModel.findById(userId.toString());
     }
 
-    // Generate tokens
-    const accessToken = generateAccessToken(user._id.toString(), user.email);
-    const refreshToken = generateRefreshToken(user._id.toString(), user.email);
+    // Generate tokens with role
+    const accessToken = generateAccessToken(user._id.toString(), user.email, user.role);
+    const refreshToken = generateRefreshToken(user._id.toString(), user.email, user.role);
 
     res.status(201).json({
       user,
@@ -69,6 +82,16 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { displayName, photoURL, role } = req.body;
+    
+    // Prevent updating the main admin user
+    const user = await UserModel.findById(req.params.id);
+    if (user?.email === 'admin@gmail.com') {
+      return res.status(403).json({ 
+        error: 'Cannot modify the main admin account',
+        message: 'This account is protected and cannot be modified.'
+      });
+    }
+    
     const updateData = { displayName, photoURL };
     
     if (role) {
@@ -76,8 +99,8 @@ router.put('/:id', async (req, res) => {
     }
     
     await UserModel.update(req.params.id, updateData);
-    const user = await UserModel.findById(req.params.id);
-    res.json(user);
+    const updatedUser = await UserModel.findById(req.params.id);
+    res.json(updatedUser);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -86,6 +109,15 @@ router.put('/:id', async (req, res) => {
 // DELETE user
 router.delete('/:id', async (req, res) => {
   try {
+    // Prevent deleting the main admin user
+    const user = await UserModel.findById(req.params.id);
+    if (user?.email === 'admin@gmail.com') {
+      return res.status(403).json({ 
+        error: 'Cannot delete the main admin account',
+        message: 'This account is protected and cannot be deleted.'
+      });
+    }
+    
     await UserModel.delete(req.params.id);
     res.json({ message: 'User deleted successfully', _id: req.params.id });
   } catch (error) {
@@ -107,8 +139,8 @@ router.post('/refresh-token', async (req, res) => {
       return res.status(403).json({ error: 'Invalid or expired refresh token' });
     }
 
-    // Generate new access token
-    const newAccessToken = generateAccessToken(decoded.userId, decoded.email);
+    // Generate new access token with role
+    const newAccessToken = generateAccessToken(decoded.userId, decoded.email, decoded.role);
 
     res.json({
       accessToken: newAccessToken,

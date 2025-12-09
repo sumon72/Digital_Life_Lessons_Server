@@ -11,15 +11,15 @@ const REFRESH_TOKEN_EXPIRY = '7d';
 /**
  * Generate access token (30 minutes expiry)
  */
-export const generateAccessToken = (userId, email) => {
-  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+export const generateAccessToken = (userId, email, role = 'user') => {
+  return jwt.sign({ userId, email, role }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 };
 
 /**
  * Generate refresh token (7 days expiry)
  */
-export const generateRefreshToken = (userId, email) => {
-  return jwt.sign({ userId, email }, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+export const generateRefreshToken = (userId, email, role = 'user') => {
+  return jwt.sign({ userId, email, role }, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
 };
 
 /**
