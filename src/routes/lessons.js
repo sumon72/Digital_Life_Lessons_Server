@@ -55,16 +55,33 @@ router.get('/:id', async (req, res) => {
 // CREATE lesson
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, content, author, status = 'draft' } = req.body;
+    const { 
+      title, 
+      content, 
+      author, 
+      description,
+      category,
+      emotionalTone,
+      authorName,
+      authorPhotoURL,
+      accessLevel,
+      status = 'draft' 
+    } = req.body;
     
-    if (!title || !content || !author) {
-      return res.status(400).json({ error: 'Title, content, and author required' });
+    if (!title || !content || !author || !description) {
+      return res.status(400).json({ error: 'Title, content, author, and description required' });
     }
 
     const lessonId = await LessonModel.create({
       title,
       content,
       author,
+      description,
+      category: category || 'Personal',
+      emotionalTone: emotionalTone || 'Hopeful',
+      authorName: authorName || author,
+      authorPhotoURL: authorPhotoURL || '',
+      accessLevel: accessLevel || 'free',
       status
     });
 
@@ -79,8 +96,30 @@ router.post('/', authenticateToken, async (req, res) => {
 // UPDATE lesson
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { title, content, author, status } = req.body;
-    await LessonModel.update(req.params.id, { title, content, author, status });
+    const { 
+      title, 
+      content, 
+      author, 
+      description,
+      category,
+      emotionalTone,
+      authorName,
+      authorPhotoURL,
+      accessLevel,
+      status 
+    } = req.body;
+    await LessonModel.update(req.params.id, { 
+      title, 
+      content, 
+      author, 
+      description,
+      category,
+      emotionalTone,
+      authorName,
+      authorPhotoURL,
+      accessLevel,
+      status 
+    });
     // Fetch and return the updated lesson
     const lesson = await LessonModel.findById(req.params.id);
     res.json(lesson);
