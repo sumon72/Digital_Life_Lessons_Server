@@ -9,7 +9,9 @@ export class LessonModel {
       createdAt: new Date(),
       updatedAt: new Date(),
       savedCount: 0,
-      viewCount: 0
+      viewCount: 0,
+      likesCount: 0,
+      likes: []
     });
     return result.insertedId;
   }
@@ -74,5 +76,57 @@ export class LessonModel {
       { _id: new ObjectId(id) },
       { $inc: { viewCount: 1 } }
     );
+  }
+
+  static async toggleLike(lessonId, userId) {
+    const db = getDB();
+    const lesson = await db.collection('lessons').findOne({ _id: new ObjectId(lessonId) });
+    
+    if (!lesson) throw new Error('Lesson not found');
+    
+    const likes = lesson.likes || [];
+    const isLiked = likes.includes(userId);
+    
+    if (isLiked) {
+      // Remove like
+      await db.collection('lessons').updateOne(
+        { _id: new ObjectId(lessonId) },
+        { 
+          $pull: { likes: userId },
+          $inc: { likesCount: -1 }
+        }
+      );
+    } else {
+      // Add like
+      await db.collection('lessons').updateOne(
+        { _id: new ObjectId(lessonId) },
+        { 
+          $push: { likes: userId },
+          $inc: { likesCount: 1 }
+        }
+      );
+    }
+    
+    return !isLiked; // Return the new state
+  }
+
+  static async findSimilar(category, emotionalTone, limit = 6, excludeId = null) {
+    const db = getDB();
+    const filter = {
+      status: 'published',
+      $or: [
+        { category: category },
+        { emotionalTone: emotionalTone }
+      ]
+    };
+    
+    if (excludeId) {
+      filter._id = { $ne: new ObjectId(excludeId) };
+    }
+    
+    return db.collection('lessons')
+      .find(filter)
+      .limit(limit)
+      .toArray();
   }
 }

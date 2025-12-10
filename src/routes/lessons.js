@@ -2,6 +2,8 @@ import express from 'express';
 import { LessonModel } from '../models/Lesson.js';
 import { SaveModel } from '../models/Save.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { getDB } from '../config/db.js';
+import { ObjectId } from 'mongodb';
 
 const router = express.Router();
 
@@ -32,6 +34,40 @@ router.get('/most-saved', async (req, res) => {
   try {
     const mostSaved = await LessonModel.findMostSaved();
     res.json(mostSaved);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET lessons by author
+router.get('/author/:authorName', async (req, res) => {
+  try {
+    const authorName = decodeURIComponent(req.params.authorName);
+    const db = getDB();
+    
+    // Find all public lessons by this author
+    const lessons = await db.collection('lessons')
+      .find({ 
+        authorName: authorName,
+        privacy: 'public'
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+    
+    // Get author info from the first lesson (if any)
+    let authorInfo = null;
+    if (lessons.length > 0) {
+      authorInfo = {
+        name: lessons[0].authorName,
+        photoURL: lessons[0].authorPhotoURL || null
+      };
+    }
+    
+    res.json({
+      lessons,
+      authorInfo,
+      total: lessons.length
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -142,6 +178,21 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// SAVE status for current user
+router.get('/:id/save/status', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+
+    const saved = await SaveModel.isSaved(userId, req.params.id);
+    res.json({ saved });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // SAVE/UNSAVE lesson
 router.post('/:id/save', async (req, res) => {
   try {
@@ -154,11 +205,84 @@ router.post('/:id/save', async (req, res) => {
     
     if (isSaved) {
       await SaveModel.delete(userId, req.params.id);
-      res.json({ message: 'Lesson unsaved', saved: false });
     } else {
       await SaveModel.create(userId, req.params.id);
-      res.json({ message: 'Lesson saved', saved: true });
     }
+    
+    // Fetch updated lesson to get current savedCount
+    const lesson = await LessonModel.findById(req.params.id);
+    const savedCount = lesson?.savedCount || 0;
+    
+    res.json({ 
+      message: isSaved ? 'Lesson unsaved' : 'Lesson saved', 
+      saved: !isSaved,
+      savedCount: savedCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// LIKE lesson
+router.post('/:id/like', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const isLiked = await LessonModel.toggleLike(req.params.id, userId);
+    const lesson = await LessonModel.findById(req.params.id);
+    res.json({ 
+      message: isLiked ? 'Lesson liked' : 'Lesson unliked',
+      isLiked,
+      likesCount: lesson.likesCount || 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET similar lessons
+router.get('/:id/similar', async (req, res) => {
+  try {
+    const lesson = await LessonModel.findById(req.params.id);
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    
+    const similar = await LessonModel.findSimilar(
+      lesson.category,
+      lesson.emotionalTone,
+      6,
+      req.params.id
+    );
+    res.json(similar);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// REPORT lesson
+router.post('/:id/report', authenticateToken, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const db = getDB();
+    
+    if (!reason) {
+      return res.status(400).json({ error: 'Reason required' });
+    }
+    
+    const report = {
+      lessonId: new ObjectId(req.params.id),
+      reporterUserId: req.user.userId,
+      reporterEmail: req.user.email,
+      reason,
+      createdAt: new Date(),
+      status: 'pending'
+    };
+    
+    const result = await db.collection('lessonReports').insertOne(report);
+    res.status(201).json({ 
+      message: 'Lesson reported successfully',
+      reportId: result.insertedId
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
