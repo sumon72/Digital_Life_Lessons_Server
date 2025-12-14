@@ -69,6 +69,36 @@ router.get('/author-email/:authorEmail', async (req, res) => {
   }
 });
 
+// GET lessons by author name (public only)
+router.get('/author/:authorName', async (req, res) => {
+  try {
+    const authorName = decodeURIComponent(req.params.authorName);
+    const db = getDB();
+
+    const lessons = await db
+      .collection('lessons')
+      .find({
+        authorName,
+        privacy: 'public'
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    let authorInfo = null;
+    if (lessons.length > 0) {
+      authorInfo = {
+        email: lessons[0].authorEmail,
+        name: lessons[0].authorName || lessons[0].authorEmail,
+        photoURL: lessons[0].authorPhotoURL || null
+      };
+    }
+
+    res.json({ lessons, authorInfo, total: lessons.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET lesson by ID
 router.get('/:id', async (req, res) => {
   try {
