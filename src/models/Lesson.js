@@ -112,20 +112,44 @@ export class LessonModel {
 
   static async findSimilar(category, emotionalTone, limit = 6, excludeId = null) {
     const db = getDB();
+    const conditions = [];
+
+    if (category) conditions.push({ category });
+    if (emotionalTone) conditions.push({ emotionalTone });
+
     const filter = {
-      status: 'published',
-      $or: [
-        { category: category },
-        { emotionalTone: emotionalTone }
-      ]
+      privacy: 'public'
     };
-    
+
     if (excludeId) {
       filter._id = { $ne: new ObjectId(excludeId) };
+    }
+
+    // Only add the OR block when we actually have values to match; otherwise allow all public lessons
+    if (conditions.length > 0) {
+      filter.$or = conditions;
     }
     
     return db.collection('lessons')
       .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  static async findRecentPublic(limit = 6, excludeId = null) {
+    const db = getDB();
+    const filter = {
+      privacy: 'public'
+    };
+
+    if (excludeId) {
+      filter._id = { $ne: new ObjectId(excludeId) };
+    }
+
+    return db.collection('lessons')
+      .find(filter)
+      .sort({ createdAt: -1 })
       .limit(limit)
       .toArray();
   }

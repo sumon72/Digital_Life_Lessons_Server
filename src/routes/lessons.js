@@ -277,12 +277,18 @@ router.get('/:id/similar', async (req, res) => {
       return res.status(404).json({ error: 'Lesson not found' });
     }
     
-    const similar = await LessonModel.findSimilar(
+    let similar = await LessonModel.findSimilar(
       lesson.category,
       lesson.emotionalTone,
       6,
       req.params.id
     );
+
+    // If no category/tone matches, fall back to latest public lessons
+    if (!similar || similar.length === 0) {
+      similar = await LessonModel.findRecentPublic(6, req.params.id);
+    }
+
     res.json(similar);
   } catch (error) {
     res.status(500).json({ error: error.message });
