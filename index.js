@@ -8,6 +8,7 @@ import contributorsRouter from './src/routes/contributors.js';
 import paymentRouter from './src/routes/payment.js';
 import dashboardRouter from './src/routes/dashboard.js';
 import adminRouter from './src/routes/admin.js';
+import commentsRouter from './src/routes/comments.js';
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ app.use('/api/contributors', contributorsRouter);
 app.use('/api/payment', paymentRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/comments', commentsRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
