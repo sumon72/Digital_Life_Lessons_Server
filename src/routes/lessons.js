@@ -162,6 +162,19 @@ router.post('/', authenticateToken, async (req, res) => {
 // UPDATE lesson
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
+    const lesson = await LessonModel.findById(req.params.id);
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    // Check authorization: only lesson owner or admin can edit
+    const isOwner = lesson.authorEmail === req.user.email;
+    const isAdmin = req.user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to edit this lesson' });
+    }
+
     const { 
       title, 
       content, 
@@ -191,8 +204,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       status 
     });
     // Fetch and return the updated lesson
-    const lesson = await LessonModel.findById(req.params.id);
-    res.json(lesson);
+    const updatedLesson = await LessonModel.findById(req.params.id);
+    res.json(updatedLesson);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -201,6 +214,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE lesson
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
+    const lesson = await LessonModel.findById(req.params.id);
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    // Check authorization: only lesson owner or admin can delete
+    const isOwner = lesson.authorEmail === req.user.email;
+    const isAdmin = req.user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to delete this lesson' });
+    }
+
     const db = getDB();
     const lessonId = req.params.id;
 
