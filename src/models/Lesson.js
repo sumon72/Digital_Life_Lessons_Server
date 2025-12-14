@@ -6,6 +6,7 @@ export class LessonModel {
     const db = getDB();
     const result = await db.collection('lessons').insertOne({
       ...lessonData,
+      featured: !!lessonData.featured,
       createdAt: new Date(),
       updatedAt: new Date(),
       savedCount: 0,
@@ -29,7 +30,7 @@ export class LessonModel {
   static async findFeatured(limit = 3) {
     const db = getDB();
     return db.collection('lessons')
-      .find({ status: 'published' })
+      .find({ status: 'published', featured: true })
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray();
