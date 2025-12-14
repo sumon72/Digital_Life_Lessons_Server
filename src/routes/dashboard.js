@@ -11,15 +11,25 @@ const router = express.Router()
 router.get('/user/stats', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId
+    const userEmail = req.user.email
     const db = getDB()
+
+    // Match lessons authored by this user across possible legacy fields
+    const authorFilter = {
+      $or: [
+        { author: new ObjectId(userId) },
+        { authorId: new ObjectId(userId) },
+        { authorEmail: userEmail }
+      ]
+    }
 
     // Get total lessons created by user
     const totalLessons = await db.collection('lessons')
-      .countDocuments({ author: new ObjectId(userId) })
+      .countDocuments(authorFilter)
 
     // Get total likes across all user's lessons
     const lessonsWithLikes = await db.collection('lessons')
-      .find({ author: new ObjectId(userId) })
+      .find(authorFilter)
       .project({ likesCount: 1 })
       .toArray()
     const totalLikes = lessonsWithLikes.reduce((sum, lesson) => sum + (lesson.likesCount || 0), 0)
@@ -30,17 +40,62 @@ router.get('/user/stats', authenticateToken, async (req, res) => {
 
     // Get recent lessons
     const recentLessons = await db.collection('lessons')
-      .find({ author: new ObjectId(userId) })
+      .find(authorFilter)
       .sort({ createdAt: -1 })
       .limit(3)
       .project({ title: 1, category: 1, emotionalTone: 1, privacy: 1, likesCount: 1, savedCount: 1, viewsCount: 1, createdAt: 1 })
       .toArray()
 
+    // Build weekly contributions (last 8 weeks including current)
+    const weeksToShow = 8
+    const today = new Date()
+    const eightWeeksAgo = new Date()
+    eightWeeksAgo.setUTCDate(today.getUTCDate() - (weeksToShow - 1) * 7)
+
+    const weeklyLessons = await db.collection('lessons')
+      .find({
+        ...authorFilter,
+        $or: [
+          { createdAt: { $gte: eightWeeksAgo } },
+          { updatedAt: { $gte: eightWeeksAgo } }
+        ]
+      })
+      .project({ createdAt: 1, updatedAt: 1 })
+      .toArray()
+
+    const getWeekStartKey = (date) => {
+      const d = new Date(date)
+      const day = d.getUTCDay() // 0=Sun
+      const diff = (day + 6) % 7 // back to Monday
+      d.setUTCHours(0, 0, 0, 0)
+      d.setUTCDate(d.getUTCDate() - diff)
+      return d.toISOString().slice(0, 10)
+    }
+
+    const weekBuckets = {}
+    weeklyLessons.forEach((lesson) => {
+      const baseDate = lesson.createdAt || lesson.updatedAt || new Date()
+      const key = getWeekStartKey(baseDate)
+      weekBuckets[key] = (weekBuckets[key] || 0) + 1
+    })
+
+    const weeklyContributions = []
+    for (let i = weeksToShow - 1; i >= 0; i--) {
+      const ref = new Date(today)
+      ref.setUTCDate(ref.getUTCDate() - i * 7)
+      const key = getWeekStartKey(ref)
+      weeklyContributions.push({
+        weekStart: key,
+        count: weekBuckets[key] || 0
+      })
+    }
+
     res.json({
       totalLessons,
       totalLikes,
       totalSaved,
-      recentLessons
+      recentLessons,
+      weeklyContributions
     })
   } catch (error) {
     console.error('Error fetching user stats:', error)
