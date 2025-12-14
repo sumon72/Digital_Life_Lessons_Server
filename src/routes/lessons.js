@@ -39,35 +39,31 @@ router.get('/most-saved', async (req, res) => {
   }
 });
 
-// GET lessons by author
-router.get('/author/:authorName', async (req, res) => {
+// GET lessons by author email (public only)
+router.get('/author-email/:authorEmail', async (req, res) => {
   try {
-    const authorName = decodeURIComponent(req.params.authorName);
+    const authorEmail = decodeURIComponent(req.params.authorEmail);
     const db = getDB();
-    
-    // Find all public lessons by this author
-    const lessons = await db.collection('lessons')
-      .find({ 
-        authorName: authorName,
+
+    const lessons = await db
+      .collection('lessons')
+      .find({
+        authorEmail,
         privacy: 'public'
       })
       .sort({ createdAt: -1 })
       .toArray();
-    
-    // Get author info from the first lesson (if any)
+
     let authorInfo = null;
     if (lessons.length > 0) {
       authorInfo = {
-        name: lessons[0].authorName,
+        email: lessons[0].authorEmail,
+        name: lessons[0].authorName || lessons[0].authorEmail,
         photoURL: lessons[0].authorPhotoURL || null
       };
     }
-    
-    res.json({
-      lessons,
-      authorInfo,
-      total: lessons.length
-    });
+
+    res.json({ lessons, authorInfo, total: lessons.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -94,30 +90,32 @@ router.post('/', authenticateToken, async (req, res) => {
     const { 
       title, 
       content, 
-      author, 
+      authorEmail, 
       description,
       category,
       emotionalTone,
       authorName,
       authorPhotoURL,
+      featuredImage,
       accessLevel,
       privacy,
       status = 'draft' 
     } = req.body;
     
-    if (!title || !content || !author || !description) {
-      return res.status(400).json({ error: 'Title, content, author, and description required' });
+    if (!title || !content || !authorEmail || !description) {
+      return res.status(400).json({ error: 'Title, content, authorEmail, and description required' });
     }
 
     const lessonId = await LessonModel.create({
       title,
       content,
-      author,
+      authorEmail,
       description,
       category: category || 'Personal',
       emotionalTone: emotionalTone || 'Hopeful',
-      authorName: authorName || author,
+      authorName: authorName || authorEmail,
       authorPhotoURL: authorPhotoURL || '',
+      featuredImage: featuredImage || '',
       accessLevel: accessLevel || 'free',
       privacy: privacy || 'private',
       status
@@ -137,12 +135,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { 
       title, 
       content, 
-      author, 
+      authorEmail, 
       description,
       category,
       emotionalTone,
       authorName,
       authorPhotoURL,
+      featuredImage,
       accessLevel,
       privacy,
       status 
@@ -150,12 +149,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
     await LessonModel.update(req.params.id, { 
       title, 
       content, 
-      author, 
+      authorEmail, 
       description,
       category,
       emotionalTone,
       authorName,
       authorPhotoURL,
+      featuredImage,
       accessLevel,
       privacy,
       status 
