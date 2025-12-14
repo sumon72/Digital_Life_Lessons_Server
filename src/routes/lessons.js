@@ -201,8 +201,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE lesson
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    await LessonModel.delete(req.params.id);
-    res.json({ message: 'Lesson deleted successfully', _id: req.params.id });
+    const db = getDB();
+    const lessonId = req.params.id;
+
+    // Remove associated reports to keep reported list clean
+    await db.collection('lessonReports').deleteMany({ lessonId: new ObjectId(lessonId) });
+
+    await LessonModel.delete(lessonId);
+    res.json({ message: 'Lesson deleted successfully', _id: lessonId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
