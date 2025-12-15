@@ -18,10 +18,15 @@ const PORT = process.env.PORT || 5000;
 // Middleware - Important: raw body for Stripe webhook must be before JSON parser
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000'];
+
 app.use(cors({
-  origin: '*',
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 app.use(express.json());
 
