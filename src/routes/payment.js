@@ -62,36 +62,54 @@ router.post('/verify-payment', authenticateToken, async (req, res) => {
 
     // Retrieve session from Stripe
     const session = await stripeInstance.checkout.sessions.retrieve(sessionId)
+    const paymentIntent = session.payment_intent
+      ? await stripeInstance.paymentIntents.retrieve(session.payment_intent)
+      : null
     
     const userId = session.metadata?.userId
     const userEmail = session.metadata?.email
 
-    // Check if payment is completed and paid
-    if (session.payment_status !== 'paid') {
-      // Payment not completed - ensure isPremium is false
-      const filter = userId && ObjectId.isValid(userId) 
-        ? { _id: new ObjectId(userId) } 
-        : { email: userEmail }
-      
-      if (filter) {
+    // Check if payment is completed and paid (fallback to payment intent status)
+    const isPaid = session.payment_status === 'paid' || paymentIntent?.status === 'succeeded'
+    const isPending = ['processing', 'requires_action'].includes(session.payment_status) 
+      || ['processing', 'requires_action'].includes(paymentIntent?.status)
+    const isFailed = ['unpaid', 'canceled', 'expired'].includes(session.payment_status)
+      || ['requires_payment_method', 'canceled'].includes(paymentIntent?.status)
+
+    if (isPending) {
+      // Payment is still being confirmed by Stripe; let client poll instead of failing immediately
+      console.log(`⌛ Payment pending. User: ${userEmail}, Session status: ${session.payment_status}, PaymentIntent: ${paymentIntent?.status}`)
+      return res.status(202).json({ success: false, pending: true, status: session.payment_status, intentStatus: paymentIntent?.status })
+    }
+
+    if (!isPaid) {
+      // Payment not completed
+      console.log(`⚠ Payment verification failed - not paid. User: ${userEmail}, Session status: ${session.payment_status}, PaymentIntent: ${paymentIntent?.status}`)
+
+      if (isFailed && (userId || userEmail)) {
+        // Explicit failure: clear premium flags
+        const filter = userId && ObjectId.isValid(userId) 
+          ? { _id: new ObjectId(userId) } 
+          : { email: userEmail }
+
         await usersCollection.updateOne(
           filter,
-          { 
-            $set: { 
+          {
+            $set: {
               isPremium: false,
-              paymentStatus: 'incomplete',
-              lastPaymentAttempt: new Date()
-            } 
+              paymentStatus: 'failed',
+              lastPaymentAttempt: new Date(),
+              stripeSessionId: sessionId
+            }
           }
         )
       }
-      
-      console.log(`⚠ Payment verification failed - not paid. User: ${userEmail}, Status: ${session.payment_status}`)
-      return res.status(400).json({ success: false, error: 'Payment not completed' })
+
+      return res.status(400).json({ success: false, error: 'Payment not completed', status: session.payment_status, intentStatus: paymentIntent?.status })
     }
 
-    if (!userId) {
-      return res.status(400).json({ success: false, error: 'User ID not found in session' })
+    if (!userId && !userEmail) {
+      return res.status(400).json({ success: false, error: 'User info not found in session metadata' })
     }
 
     // Payment is successful - Update user in MongoDB to set isPremium to true
@@ -139,36 +157,6 @@ router.post('/verify-payment', authenticateToken, async (req, res) => {
     res.json({ success: true, user: result.value })
   } catch (error) {
     console.error('Payment verification error:', error)
-    
-    // On any error, ensure isPremium stays false
-    try {
-      const { sessionId } = req.body
-      if (sessionId) {
-        const session = await stripeInstance.checkout.sessions.retrieve(sessionId)
-        const userId = session.metadata?.userId
-        const userEmail = session.metadata?.email
-        
-        const filter = userId && ObjectId.isValid(userId) 
-          ? { _id: new ObjectId(userId) } 
-          : { email: userEmail }
-        
-        if (filter) {
-          await usersCollection.updateOne(
-            filter,
-            { 
-              $set: { 
-                isPremium: false,
-                paymentStatus: 'verification_failed',
-                lastPaymentAttempt: new Date()
-              } 
-            }
-          )
-          console.log(`✓ Set isPremium to false for ${userEmail} due to verification error`)
-        }
-      }
-    } catch (fallbackError) {
-      console.error('Error setting isPremium to false:', fallbackError)
-    }
     
     res.status(500).json({ success: false, error: error.message })
   }
