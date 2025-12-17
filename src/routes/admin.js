@@ -1,7 +1,5 @@
 import express from 'express'
 import { authenticateToken } from '../middleware/auth.js'
-import { LessonModel } from '../models/Lesson.js'
-import { UserModel } from '../models/User.js'
 import { ObjectId } from 'mongodb'
 import { getDB } from '../config/db.js'
 
