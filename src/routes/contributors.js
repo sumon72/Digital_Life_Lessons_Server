@@ -22,8 +22,7 @@ router.get('/top-week', async (req, res) => {
         { $sort: { count: -1 } },
         { $limit: 10 }
       ])
-      .toArray();
-      console.log('Contributors aggregation result:', contributors);
+      .toArray(); 
     // Enrich with user details
     const enriched = await Promise.all(
       contributors.map(async (c) => {
