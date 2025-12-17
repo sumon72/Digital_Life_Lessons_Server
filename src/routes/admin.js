@@ -54,7 +54,7 @@ router.get('/stats', authenticateToken, verifyAdmin, async (req, res) => {
     // Top contributors (users with most lessons)
     const activeContributors = await db.collection('lessons').aggregate([
       { $group: { 
-          _id: '$author', 
+          _id: '$authorEmail', 
           lessonCount: { $sum: 1 },
           totalLikes: { $sum: '$likesCount' },
           totalSaves: { $sum: '$savedCount' }
@@ -64,8 +64,8 @@ router.get('/stats', authenticateToken, verifyAdmin, async (req, res) => {
       { $limit: 5 },
       { $lookup: {
           from: 'users',
-          localField: '_id',
-          foreignField: '_id',
+          localField: 'email',
+          foreignField: 'authorEmail',
           as: 'userInfo'
         }
       },
@@ -74,6 +74,7 @@ router.get('/stats', authenticateToken, verifyAdmin, async (req, res) => {
           _id: '$userInfo._id',
           displayName: '$userInfo.displayName',
           email: '$userInfo.email',
+          photoURL: '$userInfo.photoURL',
           lessonCount: 1,
           totalLikes: 1,
           totalSaves: 1
@@ -128,12 +129,12 @@ router.get('/growth-analytics', authenticateToken, verifyAdmin, async (req, res)
 
     // Get last 30 days of user registration data
     const userGrowth = await db.collection('users').aggregate([
-      { $match: { metadata: { $exists: true, $ne: null } } },
+      { $match: { createdAt: { $gte: thirtyDaysAgo } } },
       { $group: {
           _id: {
-            year: { $year: { $toDate: '$metadata.creationTime' } },
-            month: { $month: { $toDate: '$metadata.creationTime' } },
-            day: { $dayOfMonth: { $toDate: '$metadata.creationTime' } }
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' },
+            day: { $dayOfMonth: '$createdAt' }
           },
           count: { $sum: 1 }
         }
