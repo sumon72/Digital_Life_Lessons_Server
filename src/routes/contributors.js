@@ -1,13 +1,13 @@
 import express from 'express';
 import { UserModel } from '../models/User.js';
-import { LessonModel } from '../models/Lesson.js';
+import { getDB } from '../config/db.js';
 
 const router = express.Router();
 
 // GET top contributors of the week
 router.get('/top-week', async (req, res) => {
   try {
-    const db = require('../config/db.js').getDB();
+    const db = getDB();
     
     // Get lessons created in the last 7 days grouped by author
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
